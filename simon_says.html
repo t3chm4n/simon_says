@@ -1,0 +1,267 @@
+<canvas id="ctx" width="500" height="300" style="border:0px solid; position:absolute; top:100;"></canvas>
+
+<input type="button" id="btnnewgame" onclick="newGame()" style="z-index:2; position:absolute; top:50; left:50" value="New Game"/>
+<p id="message" style="position:absolute; top:50; left:150"> </p>
+<p id="life" style="position:absolute; top:20; left:400"> </p>
+<p id="points" style="position:absolute; top:50; left:400"> </p>
+
+<script>
+
+//rectangle consts
+const HEIGHT = 100;
+const WIDTH = 100;
+const LINES = 3;
+const RECTPERLINE = 5;
+
+//canvas consts
+const ctx = document.getElementById("ctx").getContext("2d");
+ctx.font = '30px Arial';
+ctx.globalAlpha = 0.5;
+const CANVASWIDTH = RECTPERLINE * WIDTH;
+const CANVASHEIGHT = LINES * HEIGHT;
+
+//game consts
+const NUMBEROFROUNDS = 10; //to win
+const INITIALQTY = 4; //initial quantity of rects in sequence
+const INITIALLIFE = 3; //player life
+const BLINKSPEED = 250; //speed that rect blink in white
+const SPEED = 1000; //time to each rect is shown
+
+var sequencePosition = 0;
+
+var rectList = [];
+
+var sequence;
+var life;
+var points;
+
+//Rectangle
+function Rectangle(id, posX, posY, color, enabled){
+	this.id = id;
+	this.posX = posX;
+	this.posY = posY;
+	this.color = color;
+	this.enabled = enabled;
+}
+
+Rectangle.prototype = {
+	contructor: Rectangle,
+	getPosX: function(){
+		return this.posX;
+	},
+	getPosY: function(){
+		return this.posY;
+	},
+	getColor: function(){
+		return this.color;
+	},
+	isEnabled: function(){
+		return this.enabled;
+	},
+	enable: function(){
+		this.enabled = true;
+	},
+	disable: function(){
+		this.enabled = false;
+		var that = this;
+		window.setTimeout(function() {
+			that.clear();
+			ctx.fillStyle = 'rgb(127,127,127)'; //grey
+			that.fill();
+			ctx.fillStyle = 'white';
+			that.fillText();
+		}, BLINKSPEED+1);
+	},
+	clear: function(){
+		ctx.clearRect(this.posX, this.posY, WIDTH, HEIGHT);
+	},
+	fill: function(){
+		ctx.fillRect(this.posX, this.posY, WIDTH, HEIGHT);
+	},
+	fillText: function(){
+		ctx.fillText('X',this.posX + 40, this.posY + 55);
+	},
+	fillStyle: function(){
+		ctx.fillStyle = this.getColor();
+	},
+	showRect: function() {
+		this.clear();
+		var that = this;
+		window.setTimeout(function() {
+			that.fillStyle();
+			that.fill();
+		}, BLINKSPEED);
+	}
+}
+
+//grid of rects with random color
+function setGrid(){
+	var id = 0;
+	var posY = 0;
+	for(var i = 1; i <= LINES; i++){
+		var posX = 0;
+		for(var j = 1; j <= RECTPERLINE; j++){
+			var color = randomRGB();
+			ctx.fillStyle = color;
+			ctx.fillRect(posX, posY, WIDTH, HEIGHT);
+			rectList.push(new Rectangle(id, posX, posY, color, true));
+			posX += WIDTH;
+			id++;
+		}
+		posY += HEIGHT;
+	}
+}
+
+function newGame(){
+	life = INITIALLIFE;
+	points = 0;
+	sequence = [];
+	newRound(INITIALQTY);
+}
+
+function newRound(qty) {
+	sequencePosition = 0;
+	showMessage('message', 'Atention! New Round!');
+	refreshLife(life);
+	refreshPoints(points);
+	disableButton('btnnewgame');
+	sequence = randomRect(sequence, qty);
+	showSequence(sequence);
+}
+
+function showSequence(sequence) {
+	var i = 0;
+	var interval = setInterval(function() {
+		rectList[sequence[i]].showRect();
+        i++;
+        if (i >= sequence.length) {
+			clearInterval(interval);
+			showMessage('message', 'Your turn!');
+        }
+   }, SPEED);
+}	
+
+setGrid();
+
+window.addEventListener("mousedown", playerTurn, false);
+
+function getClickPosition(event){ //mouse position
+  var x = event.x;
+  var y = event.y;
+
+  var canvas = document.getElementById("ctx");
+
+  x -= canvas.offsetLeft;
+  y -= canvas.offsetTop;
+  
+  return {x,y};
+}
+
+function playerTurn(){
+	if (document.getElementById("message").innerHTML == "Your turn!"){
+		var clickPosition = getClickPosition(event);
+		if (clickPosition.x >= 0 && clickPosition.x <= CANVASWIDTH && clickPosition.y >= 0 && clickPosition.y <= CANVASHEIGHT){
+			var indexOfClick = detectRectClick(clickPosition);
+			if (indexOfClick != null){
+				rectList[indexOfClick].showRect();
+				if (indexOfClick == sequence[sequencePosition]){
+					rightRect();
+				} else{
+					wrongRect(indexOfClick);
+				}
+			}
+		}
+	}
+}
+
+function detectRectClick(position){
+	for (var i = 0; i < Object.keys(rectList).length; i++){
+		if( rectList[i].isEnabled() &&
+			position.x >= rectList[i].getPosX() && 
+			position.x <= rectList[i].getPosX() + WIDTH &&
+			position.y >= rectList[i].getPosY() &&
+			position.y <= rectList[i].getPosY() + HEIGHT){
+			return i;
+		}
+	}
+}
+
+function showMessage(element, message){
+	document.getElementById(element).innerHTML = message;
+}
+
+function enableButton(button){
+	document.getElementById(button).style.visibility = "visible";
+}
+
+function disableButton(button){
+	document.getElementById(button).style.visibility = "hidden";
+}
+
+function refreshPoints(points){
+	showMessage('points', 'Points: ' + points);
+}
+
+function refreshLife(life){
+	showMessage('life', 'Life: ' + life);
+}
+
+function won(){
+	showMessage('message', 'Congratulations, you won!!!!');
+	enableButton('btnnewgame');
+}
+
+function lose(){
+	showMessage('message', 'GAME OVER!!!');
+	enableButton('btnnewgame');
+}
+
+function rightRect(){
+	refreshPoints(++points);
+	if (sequencePosition == NUMBEROFROUNDS - 1){
+		won();
+	} else {
+		if (sequencePosition < sequence.length - 1){
+			sequencePosition++;
+		} else {
+			newRound(1);
+		}
+	}
+}
+
+function wrongRect(index){
+	refreshLife(--life);
+	rectList[index].disable();
+	if (life == 0){
+		lose();
+	} else {
+		showMessage('message', 'Oh! You missed!');
+		var qty = sequence.length;
+		sequence = [];
+		window.setTimeout(function(){
+			newRound(qty);
+		}, SPEED);
+	}
+}
+
+function randomize(x){
+	return Math.floor((Math.random() * x) + 1);
+}
+
+function randomRGB(){
+	return 'rgb(' + randomize(255) + ',' + randomize(255) + ',' + randomize(255) + ')';
+}
+
+function randomRect(sequence, qty){
+	var i = 1;
+	while (i <= qty){
+		var rectCandidate = randomize(LINES * RECTPERLINE - 1);
+		if (rectList[rectCandidate].isEnabled()){
+			sequence.push(rectCandidate);
+			i++;
+		}
+	}
+	return sequence;
+}
+
+</script>
